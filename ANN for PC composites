@@ -1,0 +1,182 @@
+import tensorflow as tf
+import numpy as np
+import random
+import pandas as pd
+import pickle
+from pickle  import load
+from sklearn import preprocessing
+from sklearn.neural_network import MLPRegressor
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import KFold
+from sklearn.model_selection import train_test_split
+from sklearn.model_selection import GridSearchCV
+import matplotlib.pyplot as plt
+from sklearn.metrics import mean_squared_error
+from sklearn.metrics import r2_score
+import time
+from keras.models import Sequential
+from keras.layers import Dense
+from keras.layers import Dropout
+from pickle import load
+from tensorflow.keras import layers
+from tensorflow.keras import regularizers
+
+"""
+load data
+"""
+data = pd.read_pickle('data.pkl')
+PC = data.loc[data['Material']=='PC'].reset_index(drop=True)   #select PC composite data
+
+"""
+Random selection and split train and test data
+"""
+gb = PC.groupby(['Temperature']).groups  #group PC based on temperature values
+test_data = pd.DataFrame()
+train_data = PC
+for i in range (2): #select two random temperatures as test data  
+    res = random.choice(list(gb.items()))
+    ind_res = np.array(res[1])
+    test_data = pd.concat([test_data, PC.iloc[ind_res]])
+train_data = PC.drop(test_data.index).reset_index() #select the other as training data
+test_data.reset_index() #reset indeces
+print(test_data.Temperature.unique())
+
+"""
+scale training and testing data for main model
+"""
+input_train = train_data.loc[:,['Filler', 'Temperature', 'Strain']] #select input training data
+scaler_input = preprocessing.StandardScaler() #create scaler to standardize data
+X_train = scaler_input.fit_transform(input_train) #scale input training data
+output_train = train_data.loc[:,['Stress']] #select output training data
+scaler_output = preprocessing.StandardScaler() #create scaler to standardize data
+Y_train = scaler_output.fit_transform(output_train) #scale output training data
+input_test = test_data.loc[:,['Filler', 'Temperature', 'Strain']] #select input testing data
+X_test = scaler_input.transform(input_test) #scale input testing data
+output_test = test_data.loc[:,['Stress']] #select output testing data
+Y_test = scaler_output.transform(output_test) #scale output testing data
+
+"""
+Build main ANN model
+"""
+np.random.seed(7)
+callback = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=10) #define early stopping criteria
+model = Sequential()
+model.add(Dense(6000, input_shape=(3,), activation='relu', kernel_regularizer=regularizers.L1L2(l1=1e-6, l2=1e-5)))
+model.add(Dropout(0.1))
+model.add(Dense(6000, activation='relu', kernel_regularizer=regularizers.L1L2(l1=1e-6, l2=1e-5)))
+model.add(Dropout(0.1))
+model.add(Dense(6000, activation='relu', kernel_regularizer=regularizers.L1L2(l1=1e-6, l2=1e-5)))
+model.add(Dropout(0.1))
+model.add(Dense(6000, activation='relu', kernel_regularizer=regularizers.L1L2(l1=1e-6, l2=1e-5)))
+model.add(Dropout(0.1))
+model.add(Dense(1))
+opt = tf.keras.optimizers.Adam(learning_rate=0.00001) #define Adam optimizer and learning rate
+model.compile(optimizer=opt,
+             loss='mean_squared_error',
+             metrics=['MSE']) # define loss function
+history=model.fit(X_train, Y_train, batch_size=16, epochs=200, verbose=1, callbacks=callback) #fit model
+
+"""
+plot loss vs epochs for main model
+"""
+plt.plot(history.history['loss'])
+plt.title('model loss')
+plt.ylabel('loss')
+plt.xlabel('epoch')
+plt.show()
+
+"""
+scale training and testing data for failure model
+"""
+input_train_f = train_data.loc[:,['Filler', 'Temperature']] #select input training data
+scaler_input_f = preprocessing.StandardScaler() #create scaler to standardize data
+X_train_f = scaler_input_f.fit_transform(input_train_f) #scale input training data
+output_train_f = train_data.loc[:,['SatF']] #select output training data
+scaler_output_f = preprocessing.StandardScaler() #create scaler to standardize data
+Y_train_f = scaler_output_f.fit_transform(output_train_f) #scale output training data
+input_test_f = test_data.loc[:,['Filler', 'Temperature']] #select input testing data
+X_test_f = scaler_input_f.transform(input_test_f) #scale input testing data
+output_test_f = test_data.loc[:,['SatF']] #select output testing data
+Y_test_f = scaler_output_f.transform(output_test_f) #scale output testing data
+
+"""
+Build failure ANN model
+"""
+callback = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=10) #define early stopping criteria
+model_f = Sequential() #define layers
+model_f.add(Dense(2000, input_shape=(2,), activation='relu'))
+model_f.add(Dropout(0.1))
+model_f.add(Dense(2000, activation='relu'))
+model_f.add(Dropout(0.1))
+model_f.add(Dense(2000, activation='relu'))
+model_f.add(Dropout(0.1))
+model_f.add(Dense(2000, activation='relu'))
+model_f.add(Dropout(0.1))
+model_f.add(Dense(1))
+opt = tf.keras.optimizers.Adam(learning_rate=0.0001) #define Adam optimizer and learning rate
+model_f.compile(optimizer=opt,
+             loss='mean_squared_error',
+             metrics=['MSE']) # define loss function
+history_f=model_f.fit(X_train_f, Y_train_f, batch_size=32, epochs=200, verbose=1, callbacks=callback) #fit model
+
+"""
+plot loss vs epochs for failure model
+"""
+plt.plot(history_f.history['loss'])
+plt.title('model loss')
+plt.ylabel('loss')
+plt.xlabel('epoch')
+plt.show()
+
+"""
+Print model evaluation metrics
+"""
+pred_train = model.predict(X_train) #predict outputs for training data
+pred_test = model.predict(X_test) #predict outputs for testing data
+pred_train_f = model_f.predict(X_train_f) #predict outputs for failure training data
+pred_test_f = model_f.predict(X_test_f) #predict outputs for failure testing data
+RMSE_train = np.sqrt(mean_squared_error(scaler_output.inverse_transform(Y_train.reshape(-1,1)), scaler_output.inverse_transform(pred_train.reshape(-1,1)))) #calculate RMSE for training data
+RMSE_test = np.sqrt(mean_squared_error(scaler_output.inverse_transform(Y_test.reshape(-1,1)), scaler_output.inverse_transform(pred_test.reshape(-1,1)))) #calculate RMSE for testing data
+RMSE_train_f = np.sqrt(mean_squared_error(Y_train_f, pred_train_f)) #calculate RMSE for failure training data
+RMSE_test_f = np.sqrt(mean_squared_error(Y_test_f, pred_test_f)) #calculate RMSE for failure testing data
+print("RMSE for training data= ",RMSE_train)
+print("RMSE for testing data= ",RMSE_test)
+print("R2 for training data = ", r2_score(Y_train, pred_train))
+print("R2 for testing data = ", r2_score(Y_test, pred_test))
+print("RMSE for training data (failure model)= ",RMSE_train_f)
+print("RMSE for testing data (failure model)= ",RMSE_test_f)
+
+"""
+Create dataframe by combining input and output training and testing data
+"""
+input_data = PC.loc[:,['Filler', 'Temperature', 'Strain']] #create input dataframe (entire data)
+input_data_scaled = scaler_input.transform(input_data) #create scaled input data (entire data)
+stress_scaled = model.predict(input_data_scaled) #predict outputs for input data in scaled format
+stress_pred = pd.DataFrame(scaler_output.inverse_transform(stress_scaled)) #create dataframe of outputs in original format
+stress_pred.columns=['Stress Predicted'] #name the output data column for the final dataframe
+df = pd.concat([PC.reset_index(drop=True), stress_pred], axis=1) #create dataframe
+
+"""
+Plot curves
+"""
+fig = plt.figure(figsize=(10,14), dpi=200) #define figure format
+i=0
+for f in [0, 10, 20, 30, 40]: #fillers
+    i=i+1
+    plt.subplot(3,2,i) #define the position of subplots
+    for t in [-20, 23, 40, 60, 90, 120]: #temperatures
+        if not df.loc[(df['Filler'] == f) & (df['Temperature'] == t)].empty: #check if there is NaN value in dataframe
+            subset = df.loc[(df['Filler'] == f) & (df['Temperature'] == t)] #create subset of dataframe
+            if (t==40 or t==90): # in case of testing data:
+                plt.plot(subset.loc[:,'Strain'], subset.loc[:,'Stress Predicted'], 'r', linestyle='--') #plot predicted stress vs strain
+                plt.scatter(subset.loc[:,'Strain'], subset.loc[:,'Stress'],  marker = '*', edgecolors = 'r', facecolors='w',
+                           s=10) #plot original stress vs strain
+            else: # in case of training data:
+                plt.plot(subset.loc[:,'Strain'], subset.loc[:,'Stress Predicted'], 'k') #plot predicted stress vs strain
+                plt.scatter(subset.loc[:,'Strain'], subset.loc[:,'Stress'],  marker = '*', edgecolors = 'k', facecolors='w',
+                           s=10) #plot original stress vs strain
+            plt.title('PC; %s wt%%' % f, fontsize=12) # print title of plot
+            plt.xlabel('Strain (%)', fontsize=12) # print label for x-axis
+            plt.ylabel('Stress (MPa)', fontsize=12) # print label for y-axis
+plt.tight_layout() # tight layout of plots
+plt.show() # show plots
