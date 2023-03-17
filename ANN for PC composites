@@ -1,4 +1,4 @@
-#Import necessary libraries
+# Import necessary libraries
 import numpy as np
 import random
 import pandas as pd
@@ -38,7 +38,7 @@ for i in range (2): #select two random temperatures as test data
     ind_res = np.array(res[1])
     test_data = pd.concat([test_data, PC.iloc[ind_res]])
 
-#Split training data
+# Split training data
 train_data = PC.drop(test_data.index).reset_index() #select the other as training data
 
 # Reset indeces for training and testing data
