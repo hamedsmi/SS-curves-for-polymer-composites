@@ -29,19 +29,16 @@ data = pd.read_pickle('data.pkl')
 # Select data for PC composites (or PET composites)
 PC = data.loc[data['Material']=='PC'].reset_index(drop=True)
 
-# Random selection of temperatures for creating training and testing data
-gb = PC.groupby(['Temperature']).groups  #group PC based on temperature values
-
 # Split testing data
 test_data = pd.DataFrame()
 train_data = PC
-for i in range (2): #select two random temperatures as test data  
+for i in range (2): # Select two random temperatures as test data  
     res = random.choice(list(gb.items()))
     ind_res = np.array(res[1])
     test_data = pd.concat([test_data, PC.iloc[ind_res]])
 
 # Split training data
-train_data = PC.drop(test_data.index).reset_index() #select the other as training data
+train_data = PC.drop(test_data.index).reset_index() # Select the other as training data
 
 # Reset indeces for training and testing data
 train_data.reset_index()
@@ -101,25 +98,25 @@ print("R2 for training data = ", r2_score(Y_train, pred_train)) # Calculate and 
 print("R2 for testing data = ", r2_score(Y_test, pred_test)) # Calculate and print the R2 metric for testing data
 df = pd.concat([PC.reset_index(drop=True), stress_pred], axis=1) # Create the final dataframe
 
-# Plot plots of stress vs strain curves
+# Plot curves of stress vs strain data
 fig = plt.figure(figsize=(10,14), dpi=200) # Define figures' properties
 i=0
 for f in [0, 10, 20, 30, 40]: # Filler amount
     i=i+1
     plt.subplot(3,2,i) # Define the position of subplots
-    for t in [-20, 23, 40, 60, 90, 120]: # Define the temperature amounts
-        if not df.loc[(df['Filler'] == f) & (df['Temperature'] == t)].empty: # Check if there is a missing value in the dataframe
+    for t in [-20, 23, 40, 60, 90, 120]: # Temperature amounts
+        if not df.loc[(df['Filler'] == f) & (df['Temperature'] == t)].empty: # Check if there is any missing value in the dataframe
             subset = df.loc[(df['Filler'] == f) & (df['Temperature'] == t)] # Select a subset of dataframe for each combination of input parameters
             if (t==40 or t==90): # In case of testing data:
                 plt.plot(subset.loc[:,'Strain'], subset.loc[:,'Stress Predicted'], 'r', linestyle='--') # Plot curves of predicted stress vs strain
                 plt.scatter(subset.loc[:,'Strain'], subset.loc[:,'Stress'],  marker = '*', edgecolors = 'r', facecolors='w',
                            s=10) # Plot curves of original stress vs strain
-            else: #In case of training data:
+            else: # In case of training data:
                 plt.plot(subset.loc[:,'Strain'], subset.loc[:,'Stress Predicted'], 'k') # Plot curves of predicted stress vs strain
                 plt.scatter(subset.loc[:,'Strain'], subset.loc[:,'Stress'],  marker = '*', edgecolors = 'k', facecolors='w',
                            s=10) # Plot curves of original stress vs strain
-            plt.title('PC; %s wt%%' % f, fontsize=12) # Print title of subplots
-            plt.xlabel('Strain (%)', fontsize=12) # Print label of x-axis
-            plt.ylabel('Stress (MPa)', fontsize=12) # Print label of y-axis
+            plt.title('PC; %s wt%%' % f, fontsize=12) # Title of subplots
+            plt.xlabel('Strain (%)', fontsize=12) # Label of x-axis
+            plt.ylabel('Stress (MPa)', fontsize=12) # Label of y-axis
 plt.tight_layout() # Adjust the spacing between subplots       
 plt.show() # Show the plot
