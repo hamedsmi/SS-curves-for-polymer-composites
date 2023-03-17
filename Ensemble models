@@ -91,14 +91,35 @@ stress_pred = pd.DataFrame(scaler_output.inverse_transform(stress_scaled.reshape
 stress_pred.columns=['Stress Predicted'] # Name the prediction column
 
 # Print model evaluation metrics
-pred_train = stack.predict(X_train)
-pred_test = stack.predict(X_test)
-RMSE_train = np.sqrt(mean_squared_error(scaler_output.inverse_transform(Y_train.reshape(-1,1)), scaler_output.inverse_transform(pred_train.reshape(-1,1))))
-RMSE_test = np.sqrt(mean_squared_error(scaler_output.inverse_transform(Y_test.reshape(-1,1)), scaler_output.inverse_transform(pred_test.reshape(-1,1))))
+pred_train = stack.predict(X_train) # Make predictions on input training data
+pred_test = stack.predict(X_test) # make predictions on input testing data
+RMSE_train = np.sqrt(mean_squared_error(scaler_output.inverse_transform(Y_train.reshape(-1,1)), scaler_output.inverse_transform(pred_train.reshape(-1,1)))) # Calculate RMSE for the prediction of training data
+RMSE_test = np.sqrt(mean_squared_error(scaler_output.inverse_transform(Y_test.reshape(-1,1)), scaler_output.inverse_transform(pred_test.reshape(-1,1)))) # Calculate RMSE for the prediction of testing data
 print("RMSE for training data = ",RMSE_train)
 print("RMSE for testing data = ",RMSE_test)
-print("R2 for training data = ", r2_score(Y_train, pred_train))
-print("R2 for testing data = ", r2_score(Y_test, pred_test))
+print("R2 for training data = ", r2_score(Y_train, pred_train)) # Calculate and print the R2 metric for training data
+print("R2 for testing data = ", r2_score(Y_test, pred_test)) # Calculate and print the R2 metric for testing data
+df = pd.concat([PC.reset_index(drop=True), stress_pred], axis=1) # Create the final dataframe
 
-
-df = pd.concat([PC.reset_index(drop=True), stress_pred], axis=1)
+# Plot plots of stress vs strain curves
+fig = plt.figure(figsize=(10,14), dpi=200) # Define figures' properties
+i=0
+for f in [0, 10, 20, 30, 40]: # Filler amount
+    i=i+1
+    plt.subplot(3,2,i) # Define the position of subplots
+    for t in [-20, 23, 40, 60, 90, 120]: # Define the temperature amounts
+        if not df.loc[(df['Filler'] == f) & (df['Temperature'] == t)].empty: # Check if there is a missing value in the dataframe
+            subset = df.loc[(df['Filler'] == f) & (df['Temperature'] == t)] # Select a subset of dataframe for each combination of input parameters
+            if (t==40 or t==90): # In case of testing data:
+                plt.plot(subset.loc[:,'Strain'], subset.loc[:,'Stress Predicted'], 'r', linestyle='--') # Plot curves of predicted stress vs strain
+                plt.scatter(subset.loc[:,'Strain'], subset.loc[:,'Stress'],  marker = '*', edgecolors = 'r', facecolors='w',
+                           s=10) # Plot curves of original stress vs strain
+            else: #In case of training data:
+                plt.plot(subset.loc[:,'Strain'], subset.loc[:,'Stress Predicted'], 'k') # Plot curves of predicted stress vs strain
+                plt.scatter(subset.loc[:,'Strain'], subset.loc[:,'Stress'],  marker = '*', edgecolors = 'k', facecolors='w',
+                           s=10) # Plot curves of original stress vs strain
+            plt.title('PC; %s wt%%' % f, fontsize=12) # Print title of subplots
+            plt.xlabel('Strain (%)', fontsize=12) # Print label of x-axis
+            plt.ylabel('Stress (MPa)', fontsize=12) # Print label of y-axis
+plt.tight_layout() # Adjust the spacing between subplots       
+plt.show() # Show the plot
