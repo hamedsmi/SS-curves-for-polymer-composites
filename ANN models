@@ -24,7 +24,7 @@ from tensorflow.keras import regularizers
 # Load data from a pickle file
 data = pd.read_pickle('data.pkl')
 
-# Select data for PC composites
+# Select data for PC composites (or PET composites)
 PC = data.loc[data['Material']=='PC'].reset_index(drop=True)
 
 # Random selection of temperatures for creating training and testing data
