@@ -27,13 +27,10 @@ data = pd.read_pickle('data.pkl')
 # Select data for PC composites (or PET composites)
 PC = data.loc[data['Material']=='PC'].reset_index(drop=True)
 
-# Random selection of temperatures for creating training and testing data
-gb = PC.groupby(['Temperature']).groups  #group PC based on temperature values
-
 # Split testing data
 test_data = pd.DataFrame()
 train_data = PC
-for i in range (2): #select two random temperatures as test data  
+for i in range (2): # Select two random temperatures as test data  
     res = random.choice(list(gb.items()))
     ind_res = np.array(res[1])
     test_data = pd.concat([test_data, PC.iloc[ind_res]])
