@@ -1,0 +1,104 @@
+# Import necessary libraries
+import numpy as np
+import random
+import pandas as pd
+from pickle import load
+from sklearn import preprocessing
+from sklearn.neural_network import MLPRegressor
+from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import KFold
+from sklearn.model_selection import train_test_split
+from sklearn.model_selection import GridSearchCV
+import matplotlib.pyplot as plt
+from sklearn.metrics import mean_squared_error
+from sklearn.svm import SVR
+from sklearn.preprocessing import LabelEncoder, OneHotEncoder
+from sklearn.metrics import r2_score
+from xgboost import XGBRegressor
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import Lasso
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.linear_model import LinearRegression
+from mlxtend.regressor import StackingCVRegressor
+from time import process_time_ns
+import time
+
+# Load data from a pickle file
+data = pd.read_pickle('data.pkl')
+
+# Select data for PC composites (or PET composites)
+PC = data.loc[data['Material']=='PC'].reset_index(drop=True)
+
+# Random selection of temperatures for creating training and testing data
+gb = PC.groupby(['Temperature']).groups  #group PC based on temperature values
+
+# Split testing data
+test_data = pd.DataFrame()
+train_data = PC
+for i in range (2): #select two random temperatures as test data  
+    res = random.choice(list(gb.items()))
+    ind_res = np.array(res[1])
+    test_data = pd.concat([test_data, PC.iloc[ind_res]])
+
+# Split training data
+train_data = PC.drop(test_data.index).reset_index() #select the other as training data
+
+# Reset indeces for training and testing data
+train_data.reset_index()
+test_data.reset_index()
+
+# This script scales the training and testing data using a standard scaler for the main model
+input_train = train_data.loc[:,['Filler', 'Temperature', 'Strain']] # Select input training data
+scaler_input = preprocessing.StandardScaler() # Instantiate a StandardScaler object
+X_train = scaler_input.fit_transform(input_train) # Fit the scaler to the input training data
+output_train = train_data.loc[:,['Stress']] # Select output training data
+scaler_output = preprocessing.StandardScaler() # Instantiate a StandardScaler object
+Y_train = scaler_output.fit_transform(output_train) # Fit the scaler to the output training data
+input_test = test_data.loc[:,['Filler', 'Temperature', 'Strain']] # Select input testing data
+X_test = scaler_input.transform(input_test) # Fit the scaler to the input testing data
+output_test = test_data.loc[:,['Stress']] # Select output testing data
+Y_test = scaler_output.transform(output_test) # Fit the scaler to the output testing data
+
+# Define base models
+lr = LinearRegression() # Derfine linear regression
+lo = Lasso(alpha=0.31, tol=0.13) # Define Lasso regression
+svr = SVR(C=250, gamma=0.15, epsilon=0.03, tol=0.01) # Define SVR 
+xgb = XGBRegressor(n_estimators=1000, subsample=0.5, gamma=0, eta=0.2, max_depth=3) # Define XGB regressor
+rf = RandomForestRegressor(n_estimators=400, max_depth=3, max_leaf_nodes=2) # Define random forest regressor
+knn = KNeighborsRegressor(n_neighbors=36, weights='distance') # Define KNN regressor
+
+# This script builds ensemble models using the stacking method
+st = time.process_time() # Returns a float value of time in seconds based on the user CPU for the starting point
+stack = StackingCVRegressor(regressors=(svr, knn, lo),
+                            meta_regressor=lr, cv=15,
+                            use_features_in_secondary=True,
+                            store_train_meta_features=True,
+                            shuffle=False,
+                            random_state=42) # Define the stacking model
+stack.fit(X_train, Y_train) # Fit the model to the training data
+pd.DataFrame(X_test).columns = ['f0', 'f1', 'f2'] # Build a dataframe of input testing data with their names assigned
+pred = stack.predict(X_test) # Prediction results for the input testing data
+score = r2_score(Y_test, pred) # Calculate of R2 scores for the testing data
+et = time.process_time() # Return a flot of time in seconds based on the user CPU for the ending point
+print("Elapsed time:", et, st) # Print start and end times
+print("Elapsed time during the whole program:", et - st) # Print the elapsed time
+
+# Build dataframe of input and output data
+input_data = PC.loc[:,['Filler', 'Temperature', 'Strain']] # Input data for PC composites
+input_data_scaled = scaler_input.transform(input_data) # Fit the scaler to the input data
+stress_scaled = stack.predict(input_data_scaled) # Make predictions on input data
+stress_pred = pd.DataFrame(scaler_output.inverse_transform(stress_scaled.reshape(-1,1))) # Transform predictions to the original format
+stress_pred.columns=['Stress Predicted'] # Name the prediction column
+
+# Print model evaluation metrics
+pred_train = stack.predict(X_train)
+pred_test = stack.predict(X_test)
+RMSE_train = np.sqrt(mean_squared_error(scaler_output.inverse_transform(Y_train.reshape(-1,1)), scaler_output.inverse_transform(pred_train.reshape(-1,1))))
+RMSE_test = np.sqrt(mean_squared_error(scaler_output.inverse_transform(Y_test.reshape(-1,1)), scaler_output.inverse_transform(pred_test.reshape(-1,1))))
+print("RMSE for training data = ",RMSE_train)
+print("RMSE for testing data = ",RMSE_test)
+print("R2 for training data = ", r2_score(Y_train, pred_train))
+print("R2 for testing data = ", r2_score(Y_test, pred_test))
+
+
+df = pd.concat([PC.reset_index(drop=True), stress_pred], axis=1)
