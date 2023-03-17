@@ -1,7 +1,4 @@
-"""
-Import libraries
-"""
-import tensorflow as tf
+#Import necessary libraries
 import numpy as np
 import random
 import pandas as pd
@@ -24,45 +21,45 @@ from pickle import load
 from tensorflow.keras import layers
 from tensorflow.keras import regularizers
 
-"""
-load data
-"""
+# Load data from a pickle file
 data = pd.read_pickle('data.pkl')
-PC = data.loc[data['Material']=='PC'].reset_index(drop=True)   #select PC composite data
 
-"""
-Random selection and split train and test data
-"""
+# Select data for PC composites
+PC = data.loc[data['Material']=='PC'].reset_index(drop=True)
+
+# Random selection of temperatures for creating training and testing data
 gb = PC.groupby(['Temperature']).groups  #group PC based on temperature values
+
+# Split testing data
 test_data = pd.DataFrame()
 train_data = PC
 for i in range (2): #select two random temperatures as test data  
     res = random.choice(list(gb.items()))
     ind_res = np.array(res[1])
     test_data = pd.concat([test_data, PC.iloc[ind_res]])
+
+#Split training data
 train_data = PC.drop(test_data.index).reset_index() #select the other as training data
-test_data.reset_index() #reset indeces
-print(test_data.Temperature.unique())
 
-"""
-scale training and testing data for main model
-"""
-input_train = train_data.loc[:,['Filler', 'Temperature', 'Strain']] #select input training data
-scaler_input = preprocessing.StandardScaler() #create scaler to standardize data
-X_train = scaler_input.fit_transform(input_train) #scale input training data
-output_train = train_data.loc[:,['Stress']] #select output training data
-scaler_output = preprocessing.StandardScaler() #create scaler to standardize data
-Y_train = scaler_output.fit_transform(output_train) #scale output training data
-input_test = test_data.loc[:,['Filler', 'Temperature', 'Strain']] #select input testing data
-X_test = scaler_input.transform(input_test) #scale input testing data
-output_test = test_data.loc[:,['Stress']] #select output testing data
-Y_test = scaler_output.transform(output_test) #scale output testing data
+# Reset indeces for training and testing data
+train_data.reset_index()
+test_data.reset_index()
 
-"""
-Build main ANN model
-"""
-np.random.seed(7)
-callback = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=10) #define early stopping criteria
+# This script scales the training and testing data using a standard scaler for the main model
+input_train = train_data.loc[:,['Filler', 'Temperature', 'Strain']] # Select input training data
+scaler_input = preprocessing.StandardScaler() # Instantiate a StandardScaler object
+X_train = scaler_input.fit_transform(input_train) # Fit the scaler to the input training data
+output_train = train_data.loc[:,['Stress']] # Select output training data
+scaler_output = preprocessing.StandardScaler() # Instantiate a StandardScaler object
+Y_train = scaler_output.fit_transform(output_train) # Fit the scaler to the output training data
+input_test = test_data.loc[:,['Filler', 'Temperature', 'Strain']] # Select input testing data
+X_test = scaler_input.transform(input_test) # Fit the scaler to the input testing data
+output_test = test_data.loc[:,['Stress']] # Select output testing data
+Y_test = scaler_output.transform(output_test) # Fit the scaler to the output testing data
+
+# This script builds an ANN model for binary classification
+callback = tf.keras.callbacks.EarlyStopping(monitor='loss', patience=10) # Define early stopping criteria
+# Define layers
 model = Sequential()
 model.add(Dense(6000, input_shape=(3,), activation='relu', kernel_regularizer=regularizers.L1L2(l1=1e-6, l2=1e-5)))
 model.add(Dropout(0.1))
@@ -76,31 +73,27 @@ model.add(Dense(1))
 opt = tf.keras.optimizers.Adam(learning_rate=0.00001) #define Adam optimizer and learning rate
 model.compile(optimizer=opt,
              loss='mean_squared_error',
-             metrics=['MSE']) # define loss function
-history=model.fit(X_train, Y_train, batch_size=16, epochs=200, verbose=1, callbacks=callback) #fit model
+             metrics=['MSE']) # Define loss function
+history=model.fit(X_train, Y_train, batch_size=16, epochs=200, verbose=1, callbacks=callback) # Fit the main model to the training data
 
-"""
-plot loss vs epochs for main model
-"""
+# Plot loss vs epochs for the main model
 plt.plot(history.history['loss'])
 plt.title('model loss')
 plt.ylabel('loss')
 plt.xlabel('epoch')
 plt.show()
 
-"""
-scale training and testing data for failure model
-"""
-input_train_f = train_data.loc[:,['Filler', 'Temperature']] #select input training data
-scaler_input_f = preprocessing.StandardScaler() #create scaler to standardize data
-X_train_f = scaler_input_f.fit_transform(input_train_f) #scale input training data
-output_train_f = train_data.loc[:,['SatF']] #select output training data
-scaler_output_f = preprocessing.StandardScaler() #create scaler to standardize data
-Y_train_f = scaler_output_f.fit_transform(output_train_f) #scale output training data
-input_test_f = test_data.loc[:,['Filler', 'Temperature']] #select input testing data
-X_test_f = scaler_input_f.transform(input_test_f) #scale input testing data
-output_test_f = test_data.loc[:,['SatF']] #select output testing data
-Y_test_f = scaler_output_f.transform(output_test_f) #scale output testing data
+# This script scales the training and testing data using a standard scaler for the failure model
+input_train_f = train_data.loc[:,['Filler', 'Temperature']] # Select the input training data
+scaler_input_f = preprocessing.StandardScaler() # Instantiate a StandardScaler object
+X_train_f = scaler_input_f.fit_transform(input_train_f) # Fit the scaler to the input training data
+output_train_f = train_data.loc[:,['SatF']] # Select output training data
+scaler_output_f = preprocessing.StandardScaler() # Instantiate a StandardScaler object
+Y_train_f = scaler_output_f.fit_transform(output_train_f) # Fit the scaler to the output training data
+input_test_f = test_data.loc[:,['Filler', 'Temperature']] # Select the input testing data
+X_test_f = scaler_input_f.transform(input_test_f) # Fit the scaler to the input testing data
+output_test_f = test_data.loc[:,['SatF']] # Select the output testing data
+Y_test_f = scaler_output_f.transform(output_test_f) # Fir the scalet to the output testing data
 
 """
 Build failure ANN model
